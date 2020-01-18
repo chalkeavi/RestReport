@@ -126,6 +126,10 @@ public class CreateReport {
 
 	}
 
+	public static Set<Map.Entry<String, JsonElement>> getMapData(Map.Entry<String, JsonElement> entry) {
+		return entry.getValue().getAsJsonObject().entrySet();
+	}
+
 	public static void processRawData(List<Object> rawData) throws FileNotFoundException, IOException {
 		JsonParser parser = new JsonParser();
 		Map<String, List<String>> finalMap = new HashMap<String, List<String>>();
@@ -141,15 +145,9 @@ public class CreateReport {
 							JsonObject jObject = jsonElement.getAsJsonObject();
 							Set<Map.Entry<String, JsonElement>> entries = jObject.entrySet();
 							for (Map.Entry<String, JsonElement> entry : entries) {
-								// System.out.println(entry.getKey());
 								if (!IGNORED_JSON_NODE_LIST.contains(entry.getKey())) {
-
-									Set<Map.Entry<String, JsonElement>> data = entry.getValue().getAsJsonObject()
-											.entrySet();
 									String assetType = "";
-									for (Map.Entry<String, JsonElement> tree : data) {
-										// System.err.println(tree.getKey());
-
+									for (Map.Entry<String, JsonElement> tree : getMapData(entry)) {
 										if (tree.getKey().toUpperCase().equalsIgnoreCase("TYPE")) {
 											assetType = tree.getValue().toString().split(":")[0]
 													.replaceAll("[^a-zA-Z0-9_-]", "");
@@ -157,9 +155,7 @@ public class CreateReport {
 										}
 										List<String> finalList = new ArrayList<String>();
 										if (tree.getKey().toUpperCase().equalsIgnoreCase("PARENT")) {
-											Set<Map.Entry<String, JsonElement>> parentData = tree.getValue()
-													.getAsJsonObject().entrySet();
-											for (Map.Entry<String, JsonElement> tree2 : parentData) {
+											for (Map.Entry<String, JsonElement> tree2 : getMapData(tree)) {
 												String[] values = tree2.getValue().toString()
 														.replaceAll("[^a-zA-Z0-9_,:-]", "").split(",");
 												Integer add = Integer.valueOf(values[0].split(":")[1]);
