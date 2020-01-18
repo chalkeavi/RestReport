@@ -170,7 +170,11 @@ public class CreateReport {
 											}
 										}
 										if (assetType != null && !assetType.equalsIgnoreCase("")) {
-											finalMap.put(assetType, finalList);
+											if (null != finalMap.get(assetType)) {
+												finalMap.get(assetType).addAll(finalList);
+											} else {
+												finalMap.put(assetType, finalList);
+											}
 										}
 									}
 								}
