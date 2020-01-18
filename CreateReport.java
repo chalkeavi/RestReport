@@ -11,6 +11,7 @@ import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.HashMap;
@@ -38,7 +39,7 @@ public class CreateReport {
 	public static String SAMPLE_JSON_FILE_LOCATION = "app.json";
 	public static String DATE_SELECTION_VALUE = "startDate";
 	public static String REQUIRED_JSON_NODE = "message";
-	public static List<String> PROCESSED_JSON_NODE_LIST = new ArrayList<>(List.of("IMPORT", "EXPORT"));
+	public static List<String> PROCESSED_JSON_NODE_LIST = new ArrayList<String>(Arrays.asList("IMPORT", "EXPORT"));
 	public static List<String> IGNORED_JSON_NODE_LIST = new ArrayList<>(List.of("AT", "RE"));
 
 	public static void main(String[] args) throws ParseException, IOException, java.text.ParseException {
@@ -48,7 +49,7 @@ public class CreateReport {
 	}
 
 	public static String getJsonDataFromServer()
-			throws IOException, ParseException, java.text.ParseException{
+			throws IOException, ParseException, java.text.ParseException, org.json.simple.parser.ParseException {
 
 		// URL url = new URL("https://jsonplaceholder.typicode.com/todos/1");
 		URL url = new URL(REST_URL);
@@ -129,49 +130,53 @@ public class CreateReport {
 		JsonParser parser = new JsonParser();
 		Map<String, List<String>> finalMap = new HashMap<String, List<String>>();
 		for (Object object : rawData) {
-			JsonElement jsonTree = parser.parse(((JsonElement) object).getAsJsonPrimitive().getAsString());
-			JsonObject jsonObject = jsonTree.getAsJsonObject();
-			String type = jsonObject.get("type").toString().toUpperCase().replaceAll("[^a-zA-Z0-9_-]", "");
-			if (PROCESSED_JSON_NODE_LIST.contains(type.toString())) {
-				// System.out.println(jsonObject);
-				JsonElement jsonElement = jsonObject.get("types");
-				if (jsonElement.isJsonObject()) {
-					JsonObject jObject = jsonElement.getAsJsonObject();
-					Set<Map.Entry<String, JsonElement>> entries = jObject.entrySet();
-					for (Map.Entry<String, JsonElement> entry : entries) {
-						// System.out.println(entry.getKey());
-						if (!IGNORED_JSON_NODE_LIST.contains(entry.getKey())) {
+			if (isValidMessage(object)) {
+				JsonElement jsonTree = parser.parse(((JsonElement) object).getAsJsonPrimitive().getAsString());
+				JsonObject jsonObject = jsonTree.getAsJsonObject();
+				String type = jsonObject.get("type").toString().toUpperCase().replaceAll("[^a-zA-Z0-9_-]", "");
+				if (PROCESSED_JSON_NODE_LIST.contains(type.toString())) {
+					JsonElement jsonElement = jsonObject.get("types");
+					if (jsonElement != null) {
+						if (jsonElement.isJsonObject()) {
+							JsonObject jObject = jsonElement.getAsJsonObject();
+							Set<Map.Entry<String, JsonElement>> entries = jObject.entrySet();
+							for (Map.Entry<String, JsonElement> entry : entries) {
+								// System.out.println(entry.getKey());
+								if (!IGNORED_JSON_NODE_LIST.contains(entry.getKey())) {
 
-							Set<Map.Entry<String, JsonElement>> data = entry.getValue().getAsJsonObject().entrySet();
-							String assetType = "";
-							for (Map.Entry<String, JsonElement> tree : data) {
-								// System.err.println(tree.getKey());
-
-								if (tree.getKey().toUpperCase().equalsIgnoreCase("TYPE")) {
-									assetType = tree.getValue().toString().split(":")[0].replaceAll("[^a-zA-Z0-9_-]",
-											"");
-
-								}
-								List<String> finalList = new ArrayList<String>();
-								if (tree.getKey().toUpperCase().equalsIgnoreCase("PARENT")) {
-									Set<Map.Entry<String, JsonElement>> parentData = tree.getValue().getAsJsonObject()
+									Set<Map.Entry<String, JsonElement>> data = entry.getValue().getAsJsonObject()
 											.entrySet();
-									for (Map.Entry<String, JsonElement> tree2 : parentData) {
-										String[] values = tree2.getValue().toString().replaceAll("[^a-zA-Z0-9_,:-]", "")
-												.split(",");
-										Integer add = Integer.valueOf(values[0].split(":")[1]);
-										Integer remove = Integer.valueOf(values[1].split(":")[1]);
-										Integer update = Integer.valueOf(values[2].split(":")[1]);
-										Integer total = add + remove + update;
+									String assetType = "";
+									for (Map.Entry<String, JsonElement> tree : data) {
+										// System.err.println(tree.getKey());
 
-										// String add = values
-										finalList.add(
-												tree2.getKey() + "~" + add + "~" + update + "~" + remove + "~" + total);
+										if (tree.getKey().toUpperCase().equalsIgnoreCase("TYPE")) {
+											assetType = tree.getValue().toString().split(":")[0]
+													.replaceAll("[^a-zA-Z0-9_-]", "");
 
+										}
+										List<String> finalList = new ArrayList<String>();
+										if (tree.getKey().toUpperCase().equalsIgnoreCase("PARENT")) {
+											Set<Map.Entry<String, JsonElement>> parentData = tree.getValue()
+													.getAsJsonObject().entrySet();
+											for (Map.Entry<String, JsonElement> tree2 : parentData) {
+												String[] values = tree2.getValue().toString()
+														.replaceAll("[^a-zA-Z0-9_,:-]", "").split(",");
+												Integer add = Integer.valueOf(values[0].split(":")[1]);
+												Integer remove = Integer.valueOf(values[1].split(":")[1]);
+												Integer update = Integer.valueOf(values[2].split(":")[1]);
+												Integer total = add + remove + update;
+
+												// String add = values
+												finalList.add(tree2.getKey() + "~" + add + "~" + update + "~" + remove
+														+ "~" + total);
+
+											}
+										}
+										if (assetType != null && !assetType.equalsIgnoreCase("")) {
+											finalMap.put(assetType, finalList);
+										}
 									}
-								}
-								if (assetType != null && !assetType.equalsIgnoreCase("")) {
-									finalMap.put(assetType, finalList);
 								}
 							}
 						}
@@ -179,7 +184,16 @@ public class CreateReport {
 				}
 			}
 		}
+
 		printRecords(finalMap);
+	}
+
+	public static boolean isValidMessage(Object message) {
+
+		if (message != null && message.toString().contains("type"))
+			return true;
+		else
+			return false;
 	}
 
 	public static void printRecords(Map<String, List<String>> finalData) throws FileNotFoundException, IOException {
@@ -212,7 +226,7 @@ public class CreateReport {
 
 			for (String detail : details) {
 
-				//System.out.println(detail);
+				// System.out.println(detail);
 				int columnCount = 0;
 				Object[] values = detail.split("~");
 				Row row = sheet.createRow(++rowCount);
@@ -232,15 +246,20 @@ public class CreateReport {
 
 		try (FileOutputStream outputStream = new FileOutputStream("Report.xls")) {
 			workbook.write(outputStream);
+			System.out.println("Report has been generated....");
+		} catch (Exception e) {
+			System.err.println("The File is Opened By Another Program.Kindly Close the file first....");
 		}
 	}
 
+	@SuppressWarnings("unused")
 	public static void getdataFromgson(String file) throws ParseException, FileNotFoundException, IOException {
+		// try {
 		JsonParser parser = new JsonParser();
 		JsonElement jsonTree = parser.parse(file);
 		// System.out.println("Value is " + jsonTree);
 		JsonObject jsonObject = jsonTree.getAsJsonObject();
-		JsonElement f2 = jsonObject.get("jobs");
+		JsonElement f2 = jsonObject.get(FIRST_ELEMENT_OF_RESPONSE);
 		List<Object> rawDetails = new ArrayList<Object>();
 		if (f2.isJsonArray()) {
 			JsonArray details = f2.getAsJsonArray();
@@ -251,11 +270,14 @@ public class CreateReport {
 					Long startDate = Long.parseLong(detail.get(DATE_SELECTION_VALUE).toString());
 					if (isThisPreviousdayDate(startDate)) {
 						rawDetails.add(detail.get(REQUIRED_JSON_NODE));
-						// System.out.println(detail.get(REQUIRED_JSON_NODE));
 					}
 				}
 			}
 		}
-		processRawData(rawDetails);
+		if (!rawDetails.isEmpty())
+			processRawData(rawDetails);
+		else
+			System.out.println("No Records Available for Current Date ....");
+
 	}
 }
