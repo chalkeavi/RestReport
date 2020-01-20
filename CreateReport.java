@@ -162,15 +162,17 @@ public class CreateReport {
 												Integer remove = Integer.valueOf(values[1].split(":")[1]);
 												Integer update = Integer.valueOf(values[2].split(":")[1]);
 												Integer total = add + remove + update;
-
-												// String add = values
 												finalList.add(tree2.getKey() + "~" + add + "~" + update + "~" + remove
 														+ "~" + total);
-
 											}
 										}
 										if (assetType != null && !assetType.equalsIgnoreCase("")) {
-											finalMap.put(assetType, finalList);
+											if (null != finalMap.get(assetType)) {
+
+												finalMap.get(assetType).addAll(finalList);
+											} else {
+												finalMap.put(assetType, finalList);
+											}
 										}
 									}
 								}
@@ -180,8 +182,43 @@ public class CreateReport {
 				}
 			}
 		}
+		printRecords(refineDatas(finalMap));
+	}
 
-		printRecords(finalMap);
+	public static Map<String, List<String>> refineDatas(Map<String, List<String>> finalMap) {
+
+		for (Map.Entry<String, List<String>> map : finalMap.entrySet()) {
+			for (int i = 0; i < map.getValue().size(); i++) {
+				String str = map.getValue().get(i);
+				if (map.getValue().size() > 1) {
+					for (int j = 0; j < map.getValue().size(); j++) {
+						String str1 = map.getValue().get(j);
+						if (str.equalsIgnoreCase(str1) && i == j) {
+							continue;
+						}
+						if (str.split("~")[0].equalsIgnoreCase(str1.split("~")[0])) {
+							{
+								Integer add = Integer.parseInt(str.split("~")[1])
+										+ Integer.parseInt(str1.split("~")[1]);
+								Integer update = Integer.parseInt(str.split("~")[2])
+										+ Integer.parseInt(str1.split("~")[2]);
+								Integer remove = Integer.parseInt(str.split("~")[3])
+										+ Integer.parseInt(str1.split("~")[3]);
+								Integer total = Integer.parseInt(str.split("~")[4])
+										+ Integer.parseInt(str1.split("~")[4]);
+								map.getValue().set(map.getValue().indexOf(str),
+										str.split("~")[0] + "~" + add + "~" + update + "~" + remove + "~" + total);
+								str = str.split("~")[0] + "~" + add + "~" + update + "~" + remove + "~" + total;
+								map.getValue().remove(map.getValue().get(j));
+								j--;
+							}
+						}
+					}
+				}
+			}
+		}
+		return finalMap;
+
 	}
 
 	public static boolean isValidMessage(Object message) {
@@ -230,11 +267,8 @@ public class CreateReport {
 				cell12.setCellValue(data.getKey());
 				for (Object value : values) {
 					Cell cell = row.createCell(++columnCount);
-					if (value instanceof String) {
-						cell.setCellValue((String) value);
-					} else if (value instanceof Integer) {
-						cell.setCellValue((Integer) value);
-					}
+
+					cell.setCellValue(value.toString());
 				}
 			}
 
@@ -243,8 +277,6 @@ public class CreateReport {
 		try (FileOutputStream outputStream = new FileOutputStream("Report.xls")) {
 			workbook.write(outputStream);
 			System.out.println("Report has been generated....");
-		} catch (Exception e) {
-			System.err.println("The File is Opened By Another Program.Kindly Close the file first....");
 		}
 	}
 
