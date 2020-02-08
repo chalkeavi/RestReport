@@ -4,6 +4,7 @@ import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.UnsupportedEncodingException;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
@@ -17,6 +18,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 
 import org.apache.commons.codec.binary.Base64;
@@ -32,9 +34,10 @@ import com.google.gson.JsonParser;
 
 public class CreateReport {
 
-	public static String REST_URL = "";
-	public static String USERNAME = "";
-	public static String PASSWORD = "";
+	public static String REST_URL = "url";
+	public static String USERNAME = "username";
+	public static String PASSWORD = "password";
+	public static String ENCUSERPASS = "encuserpass";
 	public static String FIRST_ELEMENT_OF_RESPONSE = "jobs";
 	public static String SAMPLE_JSON_FILE_LOCATION = "app.json";
 	public static String DATE_SELECTION_VALUE = "startDate";
@@ -46,6 +49,11 @@ public class CreateReport {
 
 		getdataFromgson(getJsonFile());
 		// getdataFromgson(getJsonDataFromServer());
+		Map<String, String> detail = getPropertyDetails();
+		System.out.println(detail);
+		System.out.println(decodePassword(detail.get(PASSWORD)));
+		System.out.println(decodePassword(detail.get(ENCUSERPASS)));
+
 	}
 
 	public static String getJsonDataFromServer()
@@ -55,13 +63,19 @@ public class CreateReport {
 		URL url = new URL(REST_URL);
 
 		HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+		Map<String, String> details = getPropertyDetails();
 
 		String lines = "";
 		try {
 			// Set the username and password
-			String auth = USERNAME + ":" + PASSWORD;
+			String auth = details.get(USERNAME) + ":" + details.get(PASSWORD);
 			byte[] encodedAuth = Base64.encodeBase64(auth.getBytes(StandardCharsets.UTF_8));
 			String authHeaderValue = "Basic " + new String(encodedAuth);
+
+			// In case you want to send both username and password encrypted.
+			// comment line 65-67 and use uncomment 71
+			// String authHeaderValue = "Basic " + details.get(ENCUSERPASS);
+
 			conn.setRequestProperty("Authorization", authHeaderValue);
 			conn.setRequestMethod("GET");
 			conn.setRequestProperty("Accept", "application/json");
@@ -162,15 +176,17 @@ public class CreateReport {
 												Integer remove = Integer.valueOf(values[1].split(":")[1]);
 												Integer update = Integer.valueOf(values[2].split(":")[1]);
 												Integer total = add + remove + update;
-
-												// String add = values
-												finalList.add(tree2.getKey() + "~" + add + "~" + update + "~" + remove
-														+ "~" + total);
-
+												finalList.add(tree2.getKey() + "~" + add + "~" + (update + remove) + "~"
+														+ total);
 											}
 										}
 										if (assetType != null && !assetType.equalsIgnoreCase("")) {
-											finalMap.put(assetType, finalList);
+											if (null != finalMap.get(assetType)) {
+
+												finalMap.get(assetType).addAll(finalList);
+											} else {
+												finalMap.put(assetType, finalList);
+											}
 										}
 									}
 								}
@@ -180,8 +196,41 @@ public class CreateReport {
 				}
 			}
 		}
+		printRecords(refineDatas(finalMap));
+	}
 
-		printRecords(finalMap);
+	public static Map<String, List<String>> refineDatas(Map<String, List<String>> finalMap) {
+
+		for (Map.Entry<String, List<String>> map : finalMap.entrySet()) {
+			for (int i = 0; i < map.getValue().size(); i++) {
+				String str = map.getValue().get(i);
+				if (map.getValue().size() > 1) {
+					for (int j = 0; j < map.getValue().size(); j++) {
+						String str1 = map.getValue().get(j);
+						if (str.equalsIgnoreCase(str1) && i == j) {
+							continue;
+						}
+						if (str.split("~")[0].equalsIgnoreCase(str1.split("~")[0])) {
+							{
+								Integer add = Integer.parseInt(str.split("~")[1])
+										+ Integer.parseInt(str1.split("~")[1]);
+								Integer update = Integer.parseInt(str.split("~")[2])
+										+ Integer.parseInt(str1.split("~")[2]);
+								Integer total = Integer.parseInt(str.split("~")[3])
+										+ Integer.parseInt(str1.split("~")[3]);
+								map.getValue().set(map.getValue().indexOf(str),
+										str.split("~")[0] + "~" + add + "~" + update + "~" + total);
+								str = str.split("~")[0] + "~" + add + "~" + update + "~" + total;
+								map.getValue().remove(map.getValue().get(j));
+								j--;
+							}
+						}
+					}
+				}
+			}
+		}
+		return finalMap;
+
 	}
 
 	public static boolean isValidMessage(Object message) {
@@ -212,12 +261,12 @@ public class CreateReport {
 			cell3.setCellValue("Creation");
 
 			Cell cell4 = row1.createCell(3);
-			cell4.setCellValue("Modification");
+			cell4.setCellValue("Modification/Obsolute");
 
-			Cell cell5 = row1.createCell(4);
-			cell5.setCellValue("Obsolute");
+			/// Cell cell5 = row1.createCell(4);
+			// cell5.setCellValue("Obsolute");
 
-			Cell cell6 = row1.createCell(5);
+			Cell cell6 = row1.createCell(4);
 			cell6.setCellValue("Total");
 
 			for (String detail : details) {
@@ -230,11 +279,9 @@ public class CreateReport {
 				cell12.setCellValue(data.getKey());
 				for (Object value : values) {
 					Cell cell = row.createCell(++columnCount);
-					if (value instanceof String) {
-						cell.setCellValue((String) value);
-					} else if (value instanceof Integer) {
-						cell.setCellValue((Integer) value);
-					}
+
+					cell.setCellValue(value.toString());
+
 				}
 			}
 
@@ -243,8 +290,6 @@ public class CreateReport {
 		try (FileOutputStream outputStream = new FileOutputStream("Report.xls")) {
 			workbook.write(outputStream);
 			System.out.println("Report has been generated....");
-		} catch (Exception e) {
-			System.err.println("The File is Opened By Another Program.Kindly Close the file first....");
 		}
 	}
 
@@ -275,5 +320,29 @@ public class CreateReport {
 		else
 			System.out.println("No Records Available for Current Date ....");
 
+	}
+
+	public static Map<String, String> getPropertyDetails() {
+		Map<String, String> details = new HashMap<String, String>();
+		try {
+
+			FileReader file = new FileReader("common.properties");
+			Properties property = new Properties();
+			property.load(file);
+			property.getProperty("password");
+			details.put(REST_URL, property.getProperty(REST_URL));
+			details.put(USERNAME, property.getProperty(USERNAME));
+			details.put(PASSWORD, property.getProperty(PASSWORD));
+			details.put(ENCUSERPASS, property.getProperty(ENCUSERPASS));
+		} catch (FileNotFoundException e) {
+			System.out.println("File Not Found " + e);
+		} catch (IOException e) {
+			System.out.println("Propertry File Not Available " + e);
+		}
+		return details;
+	}
+
+	public static String decodePassword(String password) throws UnsupportedEncodingException {
+		return new String(Base64.decodeBase64(password.getBytes("UTF-8")));
 	}
 }
